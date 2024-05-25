@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "meme-entity-detection"
+version = "0.1.0"
+description = ""
+authors = ["Leon De Anrade <leondeandrade@hotmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+requests = "^2.32.2"
+tqdm = "^4.66.4"
+torch = "^2.3.0"
+transformers = "^4.41.0"
+pandas = "^2.2.2"
+scikit-learn = "^1.5.0"
+tokenizers = "^0.19.1"
+sentencepiece = "^0.2.0"
+protobuf = "^5.26.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
