@@ -1,0 +1,11 @@
+trainer:
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        monitor: 'validation/accuracy'
+        filename: 'best-checkpoint'
+        save_top_k: 1
+        mode: 'min'
+    - class_path: lightning.pytorch.callbacks.LearningRateMonitor
+      init_args: 
+        logging_interval: "step"

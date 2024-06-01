@@ -16,8 +16,18 @@ scikit-learn = "^1.5.0"
 tokenizers = "^0.19.1"
 sentencepiece = "^0.2.0"
 protobuf = "^5.26.1"
+lightning = {version = "^2.2.5", extras = ["extra"]}
+tensorboard = "^2.16.2"
 
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.yapf]
+COLUMN_LIMIT = 120
+SPLIT_COMPLEX_COMPREHENSION = true
+DEDENT_CLOSING_BRACKETS = true
+COALESCE_BRACKETS = true
+SPLIT_BEFORE_NAMED_ASSIGNS = false
+ALLOW_SPLIT_BEFORE_DICT_VALUE = false
