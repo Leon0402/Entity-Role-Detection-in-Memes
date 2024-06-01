@@ -42,16 +42,10 @@ def download_and_extract_zip(download_url: str, output_path: Path) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description=
-        "Download and extract a ZIP file from a URL to a specified directory.")
-    parser.add_argument('--download-url',
-                        type=str,
-                        help="The URL to download the ZIP file from.")
+    parser = argparse.ArgumentParser(description="Download and extract a ZIP file from a URL to a specified directory.")
+    parser.add_argument('--download-url', type=str, help="The URL to download the ZIP file from.")
     parser.add_argument(
-        '--output-path',
-        type=Path,
-        help="The path to the directory where the contents should be extracted."
+        '--output-path', type=Path, help="The path to the directory where the contents should be extracted."
     )
     args = parser.parse_args()
 
