@@ -10,21 +10,35 @@ from tqdm import tqdm
 
 class MemeRoleDataset(torch.utils.data.Dataset):
 
-    def __init__(self, file_path: Path, balance_dataset: bool = False):
+    def __init__(self, file_path: Path, balance_dataset: bool = False, tokenizer: str = "microsoft/deberta-v3-large", use_faces=False):
         self.data_df = self._load_data_into_df(file_path)
+        self.use_faces = use_faces
         # TODO: balancing logic seems slightly weird, maybe double check, but it was used like this in the original code
         if balance_dataset:
             self.data_df = self._balance_dataset(self.data_df)
 
-        tokenizer = transformers.AutoTokenizer.from_pretrained("microsoft/deberta-v3-large", use_fast=False)
+        if "deberta" in tokenizer.lower():
+            self.tokenizer_type = "deberta"
+        elif "roberta" in tokenizer.lower():
+            self.tokenizer_type = "roberta"
+            
+        tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer, use_fast=False)
+        
+        sentences = self.data_df['sentence'] 
+        if self.use_faces:# add faces to the sentences
+            sentences = sentences + self.data_df["faces"].apply(lambda x: x[0] if x else "")
+          
         self.text_encodings = tokenizer(
-            self.data_df['sentence'].to_list(), self.data_df['word'].to_list(), truncation=True, padding='max_length',
+            sentences.to_list(), self.data_df['word'].to_list(), truncation=True, padding='max_length',
             max_length=64
         )
 
         label2id = {'hero': 3, 'villain': 2, 'victim': 1, 'other': 0}
         self.encoded_labels = [label2id[role] for role in self.data_df['role'].to_list()]
 
+    def _check_faces(self, vals: dict):
+        return vals.get("faces", "")
+    
     def _load_data_into_df(self, file_path: Path) -> pd.DataFrame:
         with open(file_path, 'r') as json_file:
             json_data = [json.loads(line) for line in json_file]
@@ -32,6 +46,7 @@ class MemeRoleDataset(torch.utils.data.Dataset):
         return pd.DataFrame([{
             "sentence": vals['OCR'].lower().replace('\n', ' '),
             "original": vals['OCR'],
+            "faces": self._check_faces(vals), #only check for faces if faces are part of the dataset
             "word": word_val,
             "image": vals['image'],
             "role": role
@@ -52,12 +67,17 @@ class MemeRoleDataset(torch.utils.data.Dataset):
         return pd.concat([df_role, df_role_upsampled])
 
     def __getitem__(self, idx):
-        return {
+        item =  {
             'input_ids': torch.tensor(self.text_encodings.input_ids[idx], dtype=torch.long),
             'attention_mask': torch.tensor(self.text_encodings.attention_mask[idx], dtype=torch.long),
             'token_type_ids': torch.tensor(self.text_encodings.token_type_ids[idx], dtype=torch.long),
             'labels': torch.tensor(self.encoded_labels[idx], dtype=torch.long)
         }
+            
+        if self.tokenizer_type == "deberta":
+            item['token_type_ids'] = torch.tensor(self.text_encodings.token_type_ids[idx], dtype=torch.long),
 
+        return item
+        
     def __len__(self):
         return len(self.encoded_labels)
