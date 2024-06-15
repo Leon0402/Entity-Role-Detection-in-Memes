@@ -1,12 +1,10 @@
 from pathlib import Path
 import json
-
 import torch
 import transformers
 import pandas as pd
 import sklearn.utils
 from tqdm import tqdm
-
 
 class MemeRoleDataset(torch.utils.data.Dataset):
 
@@ -21,15 +19,18 @@ class MemeRoleDataset(torch.utils.data.Dataset):
             self.tokenizer_type = "deberta"
         elif "roberta" in tokenizer.lower():
             self.tokenizer_type = "roberta"
-            
-        tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer, use_fast=False)
-        
+                                  
         sentences = self.data_df['sentence'] 
         if self.use_faces:# add faces to the sentences
-            sentences = sentences + self.data_df["faces"].apply(lambda x: x[0] if x else "")
-          
-        self.text_encodings = tokenizer(
-            sentences.to_list(), self.data_df['word'].to_list(), truncation=True, padding='max_length',
+            sentences = sentences + " [SEP] - "+ self.data_df["faces"].apply(lambda x: x[0] if x else "")
+        
+        tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer, use_fast=False)
+        
+        self.encodings = tokenizer(
+            sentences.to_list(),
+            self.data_df['word'].to_list(),
+            truncation=True,
+            padding='max_length',
             max_length=64
         )
 
@@ -68,14 +69,13 @@ class MemeRoleDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         item =  {
-            'input_ids': torch.tensor(self.text_encodings.input_ids[idx], dtype=torch.long),
-            'attention_mask': torch.tensor(self.text_encodings.attention_mask[idx], dtype=torch.long),
-            'token_type_ids': torch.tensor(self.text_encodings.token_type_ids[idx], dtype=torch.long),
-            'labels': torch.tensor(self.encoded_labels[idx], dtype=torch.long)
+                'input_ids': torch.tensor(self.encodings.input_ids[idx], dtype=torch.long),
+                'attention_mask': torch.tensor(self.encodings.attention_mask[idx], dtype=torch.long),
+                'labels': torch.tensor(self.encoded_labels[idx], dtype=torch.long)
         }
-            
+                
         if self.tokenizer_type == "deberta":
-            item['token_type_ids'] = torch.tensor(self.text_encodings.token_type_ids[idx], dtype=torch.long),
+            item['token_type_ids'] = torch.tensor(self.encodings.token_type_ids[idx], dtype=torch.long),
 
         return item
         

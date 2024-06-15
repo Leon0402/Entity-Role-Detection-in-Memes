@@ -18,14 +18,12 @@ class BaselineLightningModel(L.LightningModule):
             self.model_type = "deberta"
         elif "roberta" in model_name.lower():
             self.model_type = "roberta"
-            
+
         self.lr = lr
         
-        #if self.model_type == "deberta":
         self.model = transformers.AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=num_classes)
-        #elif self.model_type == "roberta":
-        #    self.model = transformers.RobertaModel.from_pretrained(model_name)
-            
+ 
+
         self.model.train()
 
         self.save_hyperparameters()
@@ -127,7 +125,7 @@ class BaselineLightningModel(L.LightningModule):
         self.val_recall(preds, sentiment_target)
         self.val_f1(preds, sentiment_target)
 
-        self._write_log("validation", self.val_accuracy, self.val_precision, self.val_recall, self.val_f1n_f1)
+        self._write_log("validation", self.val_accuracy, self.val_precision, self.val_recall, self.val_f1)
 
     def test_step(self, batch, batch_idx):
         output, input_ids, sentiment_target = self._output_dependend_on_model_type(batch)

@@ -1,1 +1,1 @@
-from .baseline_deberta import BaselineLightningModel
+from .baseline_bert import BaselineLightningModel
