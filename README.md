@@ -30,7 +30,7 @@ In the rest of the README it is assumed that all commands are executed within th
 Data can be downloaded directly with:
 
 ```bash
-python -m meme_entity_detection.scripts.download_data --download-url "https://drive.usercontent.google.com/download?id=1wR90q3N0Vafjl-uDkFl5f8qNWmQEVdAY&export=download&confirm=t" --output-path "./data"
+python -m meme_entity_detection.scripts.download_data --download-url "hhttps://drive.usercontent.google.com/download?id=1Dqma78ofOAlVnaCehfjToJXFsFfiQUbX&export=download&confirm=t" --output-path "./data"
 ```
 
 ## Baseline 
