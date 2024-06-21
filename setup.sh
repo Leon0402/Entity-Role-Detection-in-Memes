@@ -1,4 +1,4 @@
-## !/bin/bash
+# !/bin/bash
 
 id=""
 api_key=""
@@ -44,8 +44,31 @@ api_key_helper() {
 
 cli_setup() {
     python3 -m venv vastai-helper-venv
-    source vastai-helper-venv/bin/activate
+    source ./vastai-helper-venv/bin/activate
     pip install vastai
+}
+
+git_helper() {
+
+    HOST_ADDRESS="$ip"
+    CONFIG_LINES="Host $HOST_ADDRESS\n    ForwardAgent yes"
+    if [ ! -f ~/.ssh/config ]; then
+        touch ~/.ssh/config
+    fi
+    echo "backing up sshconfig"
+    cp ~/.ssh/config ~/.ssh/config.bak
+
+    # Append the lines to the config file if they are not already present
+    if ! grep -q "Host $HOST_ADDRESS" ~/.ssh/config; then
+        echo -e "$CONFIG_LINES" >> ~/.ssh/config
+        echo "Configuration added successfully."
+    else
+        echo "Configuration for Host $HOST_ADDRESS already exists."
+    fi
+    eval "$(ssh-agent)"
+    ssh -T git@github.com
+
+
 }
 
 vastai_cli() {
@@ -81,17 +104,18 @@ vastai_cli() {
 
     instances=$(vastai show instances --api-key "$api_key")
     echo "$instances"
-    id=$(echo "$instances" | sed -n '2s/ .*//p')
+    id=$(echo "$instances" | sed -n '2s/ .*//p') 
 
-    echo ""
-    echo "Waiting 300 for the instance to start up & provision..."
-    sleep 300
-    echo ""
-    echo "...done." 
+    ip=$(curl --location --request GET 'https://console.vast.ai/api/v0/instances'        --header 'Accept: application/json'     --header "Authorization: Bearer $api_key" | grep -oP '"public_ipaddr": "\K[^"]+')
+
+    echo "remote instance Ip is $ip"
+
 }
 
-instance_setup() {
+connect_and_proxy() {
 
+    echo "waiting for machine to provision (90s)"
+    sleep 90
     echo "Attempting to connect ..."
     echo "$id"
     echo "$api_key"
@@ -109,4 +133,5 @@ ssh_key_helper
 api_key_helper
 cli_setup
 vastai_cli
-instance_setup
+git_helper
+#connect_and_proxy
