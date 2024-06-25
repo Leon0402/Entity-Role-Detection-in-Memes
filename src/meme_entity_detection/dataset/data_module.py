@@ -8,15 +8,16 @@ from .meme_role_dataset import MemeRoleDataset
 
 class DataModule(L.LightningDataModule):
 
-    def __init__(self, data_dir: Path, batch_size: int = 16, seed: int = 42, num_workers: int = 8):
+    def __init__(self, data_dir: Path, batch_size: int = 16, seed: int = 42, num_workers: int = 8, balance_train_dataset: bool = True):
         super().__init__()
         self.data_dir = data_dir
         self.batch_size = batch_size
         self.seed = seed
         self.num_workers = num_workers
+        self.balance_train_dataset = balance_train_dataset
 
     def setup(self, stage: str):
-        self.train_dataset = MemeRoleDataset(self.data_dir / "annotations/train.jsonl", balance_dataset=True)
+        self.train_dataset = MemeRoleDataset(self.data_dir / "annotations/train.jsonl", balance_dataset=self.balance_train_dataset)
         self.validation_dataset = MemeRoleDataset(self.data_dir / "annotations/dev.jsonl")
         self.test_dataset = MemeRoleDataset(self.data_dir / "annotations/dev_test.jsonl")
 
