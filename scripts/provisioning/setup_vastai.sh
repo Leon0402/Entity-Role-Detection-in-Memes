@@ -3,50 +3,45 @@
 id=""
 api_key=""
 
-ssh_key_helper() {
-    
-    if [ ! -f "vastai_ssh" ]; then
-	echo ""
-	echo "___! No SSH key present !___"
-	echo ""
-	echo "Generating a new keypair..."
-        ssh-keygen -f ./vastai_ssh -t rsa -N ''
-	echo "...done"
-	echo "Add the public key:"
-	echo ""
-	cat ./vastai_ssh.pub
-	echo ""
-	echo "to https://cloud.vast.ai/account/"
-	echo "Waiting. Press any key to continue"
-	read -n 1 -s
-    else
-	echo "Found existing SSH key"
-	ssh_key_prv=$(cat vastai_ssh)
-	ssh_key_pub=$(cat vastai_ssh.pub)
-    fi
+install_vastai() {
+    pipx install vastai
+    mkdir ./vastai
 }
 
+# Setup up api key to authenticate against vastai
 api_key_helper() {
 
-    if [ ! -f "api_key.txt" ]; then
+    if [ ! -f "./vastai/api_key.txt" ]; then
 	echo ""
 	echo "___! No API key present !___"
         echo ""
 	echo "Copy from: https://cloud.vast.ai/account/"
 	echo ""
 	read -p "Please enter API key": api_key
-	echo $api_key > api_key.txt
+	echo $api_key > ./vastai/api_key.txt
     else 
         echo "Found existing API key"
-        api_key=$(cat api_key.txt)
+        api_key=$(cat ./vastai/api_key.txt)
     fi
 }
 
-cli_setup() {
-    python3 -m venv vastai-helper-venv
-    source ./vastai-helper-venv/bin/activate
-    pip install vastai
+# Setup up ssh key for vastai to create instances
+ssh_key_helper() {
+    
+    if [ ! -f "./vastai/vastai_ssh" ]; then
+        echo ""
+        echo "___! No SSH key present !___"
+        echo ""
+        echo "Generating a new keypair..."
+            ssh-keygen -f ./vastai/vastai_ssh -t rsa -N ''
+        echo "...done"
+
+        vastai create ssh-key "$(cat ./vastai/vastai_ssh.pub)"
+    else
+        echo "Found existing SSH key"
+    fi
 }
+
 
 git_helper() {
 
@@ -58,23 +53,14 @@ git_helper() {
     echo "backing up sshconfig"
     cp ~/.ssh/config ~/.ssh/config.bak
 
-    # Append the lines to the config file if they are not already present
-    if ! grep -q "Host $HOST_ADDRESS" ~/.ssh/config; then
-        echo -e "$CONFIG_LINES" >> ~/.ssh/config
-        echo "Configuration added successfully."
-    else
-        echo "Configuration for Host $HOST_ADDRESS already exists."
-    fi
     eval "$(ssh-agent)"
+    ssh-add -k
     ssh -T git@github.com
-
-
 }
 
 vastai_cli() {
 
     ### Select Instance
-
     echo ""	
     echo -e "\033[31mAvailable 4090s:\033[0m"
     echo ""
@@ -84,19 +70,19 @@ vastai_cli() {
     echo -e "\033[31mSelect ID of the instance to be provisioned.\033[0m"
     echo ""
     while true; do
-	read -p "Enter ID: " id
-	id=$(echo "$id" | xargs)
-	if echo "$offers" | grep -Fq "$id"; then
-	    echo "Attempting to provision instance $id ..."
-	    break
-	else
-            echo "Not a valid ID"
-	fi
+        read -p "Enter ID: " id
+        id=$(echo "$id" | xargs)
+        break
+        # if echo "$offers" | grep -Fq "$id"; then
+        #     echo "Attempting to provision instance $id ..."
+        #     break
+        # else
+        #         echo "Not a valid ID"
+        # fi
     done
 
     ### Provision Instance
-
-    vastai create instance "$id" --api-key "$api_key" --image pytorch/pytorch:2.2.0-cuda12.1-cudnn8-devel --disk 32 --onstart ./onstart.sh
+    vastai create instance "$id" --api-key "$api_key" --image pytorch/pytorch:2.2.0-cuda12.1-cudnn8-devel --disk 32 --ssh --direct --onstart scripts/provisioning/onstart_vastai.sh
 
     echo ""
     echo "Currently running instances:"
@@ -115,7 +101,7 @@ vastai_cli() {
 connect_and_proxy() {
 
     echo "waiting for machine to provision (90s)"
-    sleep 90
+    # sleep 90
     echo "Attempting to connect ..."
     echo "$id"
     echo "$api_key"
@@ -125,13 +111,15 @@ connect_and_proxy() {
     echo "$user_host"
     port=$(echo "$ssh_string" | cut -d':' -f2)
     echo "$port"
-    ssh -v -p $port $user_host -L 8080:localhost:8080 -i ./vastai_ssh -o "ConnectTimeout 3" -o "StrictHostKeyChecking no" -o "UserKnownHostsFile /dev/null" "$@"
+    ssh -v -p $port $user_host -L 8080:localhost:8080 -A -i ./vastai/vastai_ssh -o "ConnectTimeout 3" -o "StrictHostKeyChecking no" -o "UserKnownHostsFile /dev/null" "$@"
     ls -la
 }
 
-ssh_key_helper
+
+install_vastai
 api_key_helper
-cli_setup
+ssh_key_helper
+
 vastai_cli
 git_helper
-#connect_and_proxy
+connect_and_proxy
