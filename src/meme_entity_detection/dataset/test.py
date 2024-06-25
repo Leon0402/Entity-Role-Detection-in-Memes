@@ -1,12 +1,12 @@
-from pathlib import Path
-import json
 import torch
 import transformers
-import torchvision.transforms
+from pathlib import Path
+import json
 import pandas as pd
 import sklearn.utils
 from tqdm import tqdm
 from PIL import Image
+from torchvision import transforms
 
 class MemeRoleDataset(torch.utils.data.Dataset):
 
@@ -14,25 +14,31 @@ class MemeRoleDataset(torch.utils.data.Dataset):
         self.data_df = self._load_data_into_df(file_path)
         self.use_faces = use_faces
 
-        self.image_base_dir = file_path.parent.parent / "images"
-
         if balance_dataset:
             self.data_df = self._balance_dataset(self.data_df)
 
-        self.tokenizer = transformers.ViltProcessor.from_pretrained("dandelin/vilt-b32-mlm")
+        self.text_tokenizer = transformers.AutoTokenizer.from_pretrained(text_tokenizer, use_fast=False)
+        self.image_processor = transformers.AutoImageProcessor.from_pretrained(image_tokenizer)
 
         self.sentences = self.data_df['sentence']
+        self.image_paths = self.data_df['image']
+        
         if self.use_faces:
             self.sentences = self.sentences + " [SEP] - "+ self.data_df["faces"].apply(lambda x: x[0] if x else "")
-        self.sentences  = self.sentences.tolist()
+
+        self.encodings = self.text_tokenizer(
+            self.sentences.to_list(),
+            self.data_df['word'].to_list(),
+            truncation=True,
+            padding='max_length',
+            max_length=64
+        )
 
         label2id = {'hero': 3, 'villain': 2, 'victim': 1, 'other': 0}
         self.encoded_labels = [label2id[role] for role in self.data_df['role'].to_list()]
 
-        self.image_transform = torchvision.transforms.Compose([
-            torchvision.transforms.Resize((384, 384)), 
-            torchvision.transforms.ToTensor()
-        ])
+    def _check_faces(self, vals: dict):
+        return vals.get("faces", "")
     
     def _load_data_into_df(self, file_path: Path) -> pd.DataFrame:
         with open(file_path, 'r') as json_file:
@@ -41,7 +47,7 @@ class MemeRoleDataset(torch.utils.data.Dataset):
         return pd.DataFrame([{
             "sentence": vals['OCR'].lower().replace('\n', ' '),
             "original": vals['OCR'],
-            "faces": vals.get("faces", ""),
+            "faces": self._check_faces(vals), 
             "word": word_val,
             "image": vals['image'],
             "role": role
@@ -62,26 +68,19 @@ class MemeRoleDataset(torch.utils.data.Dataset):
         return pd.concat([df_role, df_role_upsampled])
 
     def __getitem__(self, idx):
-        image = Image.open(self.image_base_dir / self.data_df['image'].iloc[idx]).convert("RGB")
-        image = self.image_transform(image)
+        image_path = self.image_paths[idx]
+        image = Image.open(image_path).convert("RGB")
+        image = self.image_processor(image, return_tensors="pt")["pixel_values"].squeeze(0)
         
-        encoding = self.tokenizer(
-            text=self.sentences[idx],
-            images=image,
-            return_tensors="pt",
-            padding="max_length",
-            max_length=64,
-            truncation=True
-        )
-        
-        item = {
-                'input_ids': encoding.input_ids.squeeze(0),
-                'token_type_ids': encoding.token_type_ids.squeeze(0),
-                'attention_mask': encoding.attention_mask.squeeze(0),
-                'pixel_values': encoding.pixel_values.squeeze(0),
-                'pixel_mask': encoding.pixel_mask,
+        item =  {
+                'input_ids': torch.tensor(self.encodings.input_ids[idx], dtype=torch.long),
+                'attention_mask': torch.tensor(self.encodings.attention_mask[idx], dtype=torch.long),
+                'pixel_values': image,
                 'labels': torch.tensor(self.encoded_labels[idx], dtype=torch.long)
         }
+                
+        if "deberta" in self.text_tokenizer.name_or_path.lower():
+            item['token_type_ids'] = torch.tensor(self.encodings.token_type_ids[idx], dtype=torch.long)
 
         return item
         

@@ -21,9 +21,46 @@ class BaselineLightningModel(L.LightningModule):
 
         self.lr = lr
         
-        self.model = transformers.AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=num_classes)
- 
+        # self.model = transformers.AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=num_classes)
+        
 
+        # self.model = transformers.ViltForTokenClassification.from_pretrained("dandelin/vilt-b32-mlm", config=transformers.ViltConfig(num_images=1, max_position_embeddings=64), ignore_mismatched_sizes=True)
+        cfg = transformers.ViltConfig.from_pretrained("dandelin/vilt-b32-finetuned-nlvr2")
+        cfg.num_labels = 4
+        cfg.type_vocab_size = 5
+        cfg.max_position_embeddings = 275
+        cfg.num_images=1
+        cfg.modality_type_vocab_size= cfg.modality_type_vocab_size + cfg.num_images
+        cfg.merge_with_attentions = True
+
+        processor = transformers.ViltProcessor.from_pretrained("dandelin/vilt-b32-finetuned-nlvr2")
+        checkpoint = transformers.ViltModel.from_pretrained("dandelin/vilt-b32-finetuned-nlvr2").state_dict()
+
+        # correct some weights because of some parameters changed
+        temp = checkpoint["embeddings.text_embeddings.token_type_embeddings.weight"]
+        checkpoint["embeddings.text_embeddings.token_type_embeddings.weight"]  = torch.zeros((cfg.type_vocab_size, 768))
+        checkpoint["embeddings.text_embeddings.token_type_embeddings.weight"][:2, :] = temp  
+
+        # temp = checkpoint["embeddings.text_embeddings.position_ids"]
+        # checkpoint["embeddings.text_embeddings.position_ids"]  = torch.zeros((1, cfg.max_position_embeddings))
+        # checkpoint["embeddings.text_embeddings.position_ids"][:, :40] = temp  
+
+        temp = checkpoint["embeddings.text_embeddings.position_embeddings.weight"]
+        checkpoint["embeddings.text_embeddings.position_embeddings.weight"]  = torch.zeros(( cfg.max_position_embeddings, 768))
+        checkpoint["embeddings.text_embeddings.position_embeddings.weight"][:40 ] = temp 
+
+        temp = checkpoint["embeddings.token_type_embeddings.weight"]
+        checkpoint["embeddings.token_type_embeddings.weight"]  = torch.zeros(( cfg.modality_type_vocab_size, 768))
+        checkpoint["embeddings.token_type_embeddings.weight"][:3 ] = temp 
+        #del checkpoint["embeddings.text_embeddings.token_type_embeddings.weight"]
+
+        # loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=CFG.smoothing) 
+        self.model =  transformers.ViltForImagesAndTextClassification(cfg)
+        self.model.vilt.load_state_dict(checkpoint, strict=True)
+
+        self.model_type = "vilt"
+ 
+ 
         self.model.train()
 
         self.save_hyperparameters()
@@ -71,28 +108,33 @@ class BaselineLightningModel(L.LightningModule):
             },
         }
 
-    def _output_dependend_on_model_type(self, batch):
-        input_ids = batch['input_ids']
-        attention_mask = batch['attention_mask']
-        sentiment_target = batch['labels']
-        
+    def _output_dependend_on_model_type(self, batch):        
         if self.model_type == "deberta":
-            token_type_ids = batch['token_type_ids']
             output = self.model(            
-                input_ids,
-                attention_mask,
-                token_type_ids,
-                labels=sentiment_target,
+                batch['input_ids'],
+                batch['attention_mask'],
+                batch['token_type_ids'],
+                labels=batch['labels'],
             ) 
         
         elif self.model_type == "roberta":
             output = self.model(
-                input_ids, 
-                attention_mask, 
-                labels=sentiment_target
+                batch['input_ids'], 
+                batch['attention_mask'], 
+                labels=batch['labels']
+            )
+
+        elif self.model_type == "vilt":
+            output = self.model(
+                input_ids= batch['input_ids'],
+                attention_mask=batch['attention_mask'],
+                token_type_ids=batch["token_type_ids"],
+                pixel_values=batch['pixel_values'], 
+                pixel_mask=batch['pixel_mask'], 
+                labels=batch['labels']
             )
            
-        return output, input_ids, sentiment_target
+        return output, batch['input_ids'], batch['labels']
     
     def _write_log(self, mode, accuracy, precision, recall, f1):
         self.log(f'{mode}/accuracy', accuracy, on_step=False, on_epoch=True)
