@@ -2,13 +2,12 @@ from pathlib import Path
 import json
 
 import torch
-import transformers
-import torchvision.transforms
 import pandas as pd
 import sklearn.utils
 import torch.utils.data.dataloader
 from tqdm import tqdm
 from PIL import Image
+
 
 class MemeRoleDataset(torch.utils.data.Dataset):
 
@@ -21,19 +20,9 @@ class MemeRoleDataset(torch.utils.data.Dataset):
         if balance_dataset:
             self.data_df = self._balance_dataset(self.data_df)
 
-        self.sentences = self.data_df['sentence']
-        if self.use_faces:
-            self.sentences = self.sentences + " [SEP] - "+ self.data_df["faces"].apply(lambda x: x[0] if x else "")
-        self.sentences  = self.sentences.tolist()
-
         label2id = {'hero': 3, 'villain': 2, 'victim': 1, 'other': 0}
         self.encoded_labels = [label2id[role] for role in self.data_df['role'].to_list()]
 
-        self.image_transform = torchvision.transforms.Compose([
-            torchvision.transforms.Resize((384, 384)), 
-            torchvision.transforms.ToTensor()
-        ])
-    
     def _load_data_into_df(self, file_path: Path) -> pd.DataFrame:
         with open(file_path, 'r') as json_file:
             json_data = [json.loads(line) for line in json_file]
@@ -64,11 +53,29 @@ class MemeRoleDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         image = Image.open(self.image_base_dir / self.data_df['image'].iloc[idx]).convert("RGB")
 
-        return {"image": image, "text": self.sentences[idx], "label": torch.tensor(self.encoded_labels[idx], dtype=torch.long)}
-        
+        row = self.data_df.iloc[idx]
+        faces = " - ".join(row["faces"] or []) if self.use_faces else ""
+        return {
+            "image": image,
+            "text": row["sentence"] + " [SEP] " + row["word"] + " [SEP] " + faces,
+            "label": torch.tensor(self.encoded_labels[idx], dtype=torch.long)
+        }
+
     def __len__(self):
         return len(self.encoded_labels)
 
     @staticmethod
-    def collate_fn(batch):
-        return {"text":  [item['text'] for item in batch], "image":  [item['image'] for item in batch], "label": torch.utils.data.dataloader.default_collate([item['label'] for item in batch])}
+    def collate_fn(batch, processor):
+        texts = [item['text'] for item in batch]
+        images = [item['image'] for item in batch]
+        labels = torch.tensor([item['label'] for item in batch], dtype=torch.long)
+
+        encoding = processor(
+            text=texts, images=images, return_tensors="pt", padding="max_length", max_length=275, truncation=True
+        )
+        batch_size, height, width = encoding['pixel_mask'].shape
+        encoding['pixel_mask'] = encoding['pixel_mask'].view(batch_size, 1, height, width)
+
+        encoding['labels'] = labels
+
+        return encoding
