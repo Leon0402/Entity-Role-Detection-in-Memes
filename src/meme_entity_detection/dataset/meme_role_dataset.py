@@ -1,16 +1,18 @@
 from pathlib import Path
 import json
+
 import torch
 import transformers
 import torchvision.transforms
 import pandas as pd
 import sklearn.utils
+import torch.utils.data.dataloader
 from tqdm import tqdm
 from PIL import Image
 
 class MemeRoleDataset(torch.utils.data.Dataset):
 
-    def __init__(self, file_path: Path, balance_dataset: bool = False, text_tokenizer: str = "microsoft/deberta-v3-large", image_tokenizer: str = "google/vit-base-patch16-224", use_faces=False):
+    def __init__(self, file_path: Path, balance_dataset: bool = False, use_faces=False):
         self.data_df = self._load_data_into_df(file_path)
         self.use_faces = use_faces
 
@@ -18,8 +20,6 @@ class MemeRoleDataset(torch.utils.data.Dataset):
 
         if balance_dataset:
             self.data_df = self._balance_dataset(self.data_df)
-
-        self.tokenizer = transformers.ViltProcessor.from_pretrained("dandelin/vilt-b32-mlm")
 
         self.sentences = self.data_df['sentence']
         if self.use_faces:
@@ -63,27 +63,12 @@ class MemeRoleDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         image = Image.open(self.image_base_dir / self.data_df['image'].iloc[idx]).convert("RGB")
-        image = self.image_transform(image)
-        
-        encoding = self.tokenizer(
-            text=self.sentences[idx],
-            images=image,
-            return_tensors="pt",
-            padding="max_length",
-            max_length=64,
-            truncation=True
-        )
-        
-        item = {
-                'input_ids': encoding.input_ids.squeeze(0),
-                'token_type_ids': encoding.token_type_ids.squeeze(0),
-                'attention_mask': encoding.attention_mask.squeeze(0),
-                'pixel_values': encoding.pixel_values.squeeze(0),
-                'pixel_mask': encoding.pixel_mask,
-                'labels': torch.tensor(self.encoded_labels[idx], dtype=torch.long)
-        }
 
-        return item
+        return {"image": image, "text": self.sentences[idx], "label": torch.tensor(self.encoded_labels[idx], dtype=torch.long)}
         
     def __len__(self):
         return len(self.encoded_labels)
+
+    @staticmethod
+    def collate_fn(batch):
+        return {"text":  [item['text'] for item in batch], "image":  [item['image'] for item in batch], "label": torch.utils.data.dataloader.default_collate([item['label'] for item in batch])}

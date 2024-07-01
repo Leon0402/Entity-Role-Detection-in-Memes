@@ -8,7 +8,7 @@ from .meme_role_dataset import MemeRoleDataset
 
 class DataModule(L.LightningDataModule):
 
-    def __init__(self, data_dir: Path, batch_size: int = 16, seed: int = 42, num_workers: int = 8, balance_train_dataset: bool = True, use_faces: bool = True, text_tokenizer: str = "microsoft/deberta-v3-large"):
+    def __init__(self, data_dir: Path, batch_size: int = 16, seed: int = 42, num_workers: int = 8, balance_train_dataset: bool = True, use_faces: bool = True):
         super().__init__()
         self.data_dir = data_dir
         self.batch_size = batch_size
@@ -16,18 +16,18 @@ class DataModule(L.LightningDataModule):
         self.num_workers = num_workers
         self.balance_train_dataset = balance_train_dataset
         self.use_faces = use_faces
-        self.text_tokenizer = text_tokenizer
 
     def setup(self, stage: str):
-        self.train_dataset = MemeRoleDataset(self.data_dir / "annotations/train.jsonl", balance_dataset=self.balance_train_dataset, use_faces=self.use_faces, text_tokenizer=self.text_tokenizer)
-        self.validation_dataset = MemeRoleDataset(self.data_dir / "annotations/dev.jsonl", use_faces=self.use_faces, text_tokenizer=self.text_tokenizer)
-        self.test_dataset = MemeRoleDataset(self.data_dir / "annotations/dev_test.jsonl", use_faces=self.use_faces, text_tokenizer=self.text_tokenizer)
+        self.train_dataset = MemeRoleDataset(self.data_dir / "annotations/train.jsonl", balance_dataset=self.balance_train_dataset, use_faces=self.use_faces)
+        self.validation_dataset = MemeRoleDataset(self.data_dir / "annotations/dev.jsonl", use_faces=self.use_faces)
+        self.test_dataset = MemeRoleDataset(self.data_dir / "annotations/dev_test.jsonl", use_faces=self.use_faces)
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(
             self.train_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
+            collate_fn=MemeRoleDataset.collate_fn,
             shuffle=True,
         )
 
@@ -36,6 +36,7 @@ class DataModule(L.LightningDataModule):
             self.validation_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
+            collate_fn=MemeRoleDataset.collate_fn,
             shuffle=False,
         )
 
@@ -44,5 +45,6 @@ class DataModule(L.LightningDataModule):
             self.test_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
+            collate_fn=MemeRoleDataset.collate_fn,
             shuffle=False,
         )

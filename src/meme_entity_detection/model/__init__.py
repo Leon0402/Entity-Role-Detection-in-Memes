@@ -1,0 +1,1 @@
+from .vilt import ViltModel

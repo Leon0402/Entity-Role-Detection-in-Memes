@@ -37,7 +37,7 @@ python -m meme_entity_detection.scripts.download_data --download-url "https://dr
 
 Train with:
 ```bash
-python -m meme_entity_detection.scripts.baseline fit --seed_everything 4 --data.batch_size 8 --data.data_dir "./data/HVVMemesWithFaces" --model.lr 0.00001 --trainer.max_epochs 12 --trainer.accumulate_grad_batches 2 --trainer.precision "bf16" --trainer.logger TensorBoardLogger --trainer.logger.save_dir ./logs/baseline_faces/training  --config configs/config.yaml 
+python -m meme_entity_detection.scripts.baseline fit --seed_everything 4 --data.batch_size 32 --data.data_dir "./data/HVVMemesWithFaces" --model.lr 0.00001 --trainer.max_epochs 12 --trainer.accumulate_grad_batches 2 --trainer.precision "bf16" --trainer.logger TensorBoardLogger --trainer.logger.save_dir ./logs/baseline_faces/training  --config configs/config.yaml 
 ```
 
 Check training results with:
