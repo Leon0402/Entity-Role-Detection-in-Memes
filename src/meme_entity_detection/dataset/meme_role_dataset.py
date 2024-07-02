@@ -12,9 +12,19 @@ from PIL import Image
 
 class MemeRoleDataset(torch.utils.data.Dataset):
 
-    def __init__(self, file_path: Path, balance_dataset: bool = False, use_faces=False):
+    def __init__(
+        self,
+        file_path: Path, 
+        balance_dataset: bool = False, 
+        use_faces=False,
+        ocr_type="OCR", # use GPT4o or OCR
+        use_gpt_description: bool = False):
+        
         self.data_df = self._load_data_into_df(file_path)
         self.use_faces = use_faces
+        self.ocr_type = ocr_type
+        self.use_gpt_description = use_gpt_description
+
 
         self.image_base_dir = file_path.parent.parent / "images"
 
@@ -30,8 +40,12 @@ class MemeRoleDataset(torch.utils.data.Dataset):
         with open(file_path, 'r') as json_file:
             json_data = [json.loads(line) for line in json_file]
 
+        
         return pd.DataFrame([{
             "sentence": vals['OCR'].lower().replace('\n', ' '),
+            "sentence GPT-4o": (vals["OCR GPT-4o"] if vals["OCR GPT-4o"] else "").lower().replace('\n', ' '),
+            "description GPT-4o": (vals["IMAGE DESCRIPTION GPT-4o"] if vals["IMAGE DESCRIPTION GPT-4o"] else "").lower().replace('\n', ' '),
+            "classification GPT-4o": vals["CLASSIFICATION GPT-4o"] if vals["CLASSIFICATION GPT-4o"] else None,
             "original": vals['OCR'],
             "faces": vals.get("faces", ""),
             "word": word_val,
@@ -58,9 +72,17 @@ class MemeRoleDataset(torch.utils.data.Dataset):
 
         row = self.data_df.iloc[idx]
         faces = " - ".join(row["faces"] or []) if self.use_faces else ""
+        
+        if self.ocr_type == "GPT-4o" and row["sentence GPT-4o"] != "": #use only gpt ocr if enabled and available
+            row["sentence"] = row["sentence GPT-4o"]
+        
+        description = ""
+        if self.use_gpt_description:
+            description += " [SEP] " + row["description GPT-4o"]
+        
         return {
             "image": image,
-            "text": row["sentence"] + " [SEP] " + row["word"] + " [SEP] " + faces,
+            "text": row["sentence"] + " [SEP] " + row["word"] + " [SEP] " + faces + description,
             "label": torch.tensor(self.encoded_labels[idx], dtype=torch.long)
         }
 
