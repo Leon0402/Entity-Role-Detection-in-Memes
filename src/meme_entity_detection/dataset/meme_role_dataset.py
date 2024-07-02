@@ -2,6 +2,7 @@ from pathlib import Path
 import json
 
 import torch
+import transformers
 import pandas as pd
 import sklearn.utils
 import torch.utils.data.dataloader
@@ -22,6 +23,8 @@ class MemeRoleDataset(torch.utils.data.Dataset):
 
         label2id = {'hero': 3, 'villain': 2, 'victim': 1, 'other': 0}
         self.encoded_labels = [label2id[role] for role in self.data_df['role'].to_list()]
+
+        self.processor = transformers.ViltProcessor.from_pretrained("dandelin/vilt-b32-finetuned-nlvr2")
 
     def _load_data_into_df(self, file_path: Path) -> pd.DataFrame:
         with open(file_path, 'r') as json_file:
@@ -70,8 +73,9 @@ class MemeRoleDataset(torch.utils.data.Dataset):
         images = [item['image'] for item in batch]
         labels = torch.tensor([item['label'] for item in batch], dtype=torch.long)
 
+        # TODO: Check what value makes sense for max_length. One of the paper uses 275, but this significantly slowed down training
         encoding = processor(
-            text=texts, images=images, return_tensors="pt", padding="max_length", max_length=275, truncation=True
+            text=texts, images=images, return_tensors="pt", padding="max_length", max_length=64, truncation=True
         )
         batch_size, height, width = encoding['pixel_mask'].shape
         encoding['pixel_mask'] = encoding['pixel_mask'].view(batch_size, 1, height, width)
