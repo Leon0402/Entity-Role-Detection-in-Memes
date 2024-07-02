@@ -1,6 +1,6 @@
 from pathlib import Path
 import json
-
+from collections import defaultdict
 import torch
 import transformers
 import pandas as pd
@@ -17,7 +17,7 @@ class MemeRoleDataset(torch.utils.data.Dataset):
         file_path: Path, 
         balance_dataset: bool = False, 
         use_faces=False,
-        ocr_type="OCR", # use GPT4o or OCR
+        ocr_type="OCR", # use GPT-4o or OCR
         use_gpt_description: bool = False):
         
         self.data_df = self._load_data_into_df(file_path)
@@ -40,19 +40,35 @@ class MemeRoleDataset(torch.utils.data.Dataset):
         with open(file_path, 'r') as json_file:
             json_data = [json.loads(line) for line in json_file]
 
-        
-        return pd.DataFrame([{
+        all_roles = ['hero', 'villain', 'victim', 'other']   
+        df =  pd.DataFrame([{
             "sentence": vals['OCR'].lower().replace('\n', ' '),
             "sentence GPT-4o": (vals["OCR GPT-4o"] if vals["OCR GPT-4o"] else "").lower().replace('\n', ' '),
             "description GPT-4o": (vals["IMAGE DESCRIPTION GPT-4o"] if vals["IMAGE DESCRIPTION GPT-4o"] else "").lower().replace('\n', ' '),
-            "classification GPT-4o": vals["CLASSIFICATION GPT-4o"] if vals["CLASSIFICATION GPT-4o"] else None,
+            "classification GPT-4o": defaultdict(lambda: "other", vals["CLASSIFICATION GPT-4o"]) if vals["CLASSIFICATION GPT-4o"] else defaultdict(lambda: "other"),
             "original": vals['OCR'],
             "faces": vals.get("faces", ""),
             "word": word_val,
             "image": vals['image'],
             "role": role
-        } for vals in tqdm(json_data) for role in ['hero', 'villain', 'victim', 'other'] for word_val in vals[role]])
+        } for vals in tqdm(json_data) for role in all_roles for word_val in vals[role]])
 
+
+
+        df["classification GPT-4o"]  = [data["classification GPT-4o"][data["word"]] for _, data in tqdm(df[["classification GPT-4o", "word"]].iterrows())]
+        df["classification GPT-4o"] = df["classification GPT-4o"].str.replace("villian", "villain")
+        df["classification GPT-4o"] = df["classification GPT-4o"].apply(lambda x: self._correct_gpt4o_classification(x, all_roles))
+        df["class_id GPT-4o"] = df["classification GPT-4o"].apply(lambda x: {'hero': 3, 'villain': 2, 'victim': 1, 'other': 0}[x])
+        
+
+        return df
+    
+    def _correct_gpt4o_classification(self, class_: str, all_roles: list):
+        class_ = class_.replace("villian", "villain")
+        if not class_ in all_roles:
+            class_ = "other"
+        return class_ 
+        
     def _balance_dataset(self, df: pd.DataFrame) -> pd.DataFrame:
         upsampled_role_dfs = [self._upsample_and_concat(df, role) for role in ['hero', 'villain', 'victim']]
         return pd.concat([df[df.role == 'other'], *upsampled_role_dfs])
@@ -83,6 +99,7 @@ class MemeRoleDataset(torch.utils.data.Dataset):
         return {
             "image": image,
             "text": row["sentence"] + " [SEP] " + row["word"] + " [SEP] " + faces + description,
+            "class_id GPT-4o": row["class_id GPT-4o"],
             "label": torch.tensor(self.encoded_labels[idx], dtype=torch.long)
         }
 
@@ -91,6 +108,7 @@ class MemeRoleDataset(torch.utils.data.Dataset):
 
     @staticmethod
     def collate_fn(batch, processor):
+        gpt4_classifications = torch.tensor([item['class_id GPT-4o'] for item in batch])
         texts = [item['text'] for item in batch]
         images = [item['image'] for item in batch]
         labels = torch.tensor([item['label'] for item in batch], dtype=torch.long)
@@ -103,5 +121,6 @@ class MemeRoleDataset(torch.utils.data.Dataset):
         encoding['pixel_mask'] = encoding['pixel_mask'].view(batch_size, 1, height, width)
 
         encoding['labels'] = labels
+        encoding['class_id GPT-4o'] = gpt4_classifications
 
         return encoding

@@ -11,10 +11,4 @@ class GPT4oPromptAnswers(nn.Module):
         super().__init__()
 
     def forward(self, batch):
-        output = self.model(
-            batch['input_ids'],
-            batch['attention_mask'],
-            labels=batch['labels'],
-        )
-
-        return output.loss, torch.argmax(output.logits, dim=1)
+        return 0, batch['class_id GPT-4o']

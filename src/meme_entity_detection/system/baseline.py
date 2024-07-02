@@ -14,7 +14,7 @@ class BaselineLightningModel(L.LightningModule):
         super().__init__()
         self.lr = lr
         self.model = backbone
-
+        
         self.save_hyperparameters(ignore=['backbone'])
 
         # TODO
