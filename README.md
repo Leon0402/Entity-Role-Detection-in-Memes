@@ -35,11 +35,13 @@ python -m meme_entity_detection.scripts.download_data --download-url "https://dr
 
 ## Baseline 
 
+-  OCR Type: GPT-4o, OCR
+
 ## RoBERTa
 
 Train with:
 ```bash
-python -m meme_entity_detection.scripts.baseline fit --seed_everything 4 --data.batch_size 32 --data.data_dir "./data/HVVMemes" --data.ocr_type "GPT-4o" --model.lr 0.00001 --model.backbone meme_entity_detection.model.RobertaModel --trainer.max_epochs 12 --trainer.accumulate_grad_batches 1 --trainer.precision "bf16-mixed" --trainer.logger TensorBoardLogger --trainer.logger.save_dir ./logs/roberta_faces/training  --config configs/config.yaml 
+python -m meme_entity_detection.scripts.baseline fit --seed_everything 4 --data.batch_size 32 --data.data_dir "./data/HVVMemes" --data.ocr_type "GPT-4o" --data.tokenizer "FacebookAI/roberta-large" --model.lr 0.00001 --model.backbone meme_entity_detection.model.RobertaModel --trainer.max_epochs 12 --trainer.accumulate_grad_batches 1 --trainer.precision "bf16-mixed" --trainer.logger TensorBoardLogger --trainer.logger.save_dir ./logs/roberta_faces/training  --config configs/config.yaml 
 ```
 
 Check training results with:
@@ -49,7 +51,7 @@ tensorboard --logdir ./logs/roberta_faces/training
 
 Test with:
 ```bash
-python -m meme_entity_detection.scripts.baseline test --seed_everything 4 --data.batch_size 32 --data.data_dir "./data/HVVMemes" --data.ocr_type "GPT-4o" --model.lr 0.00001 --model.backbone meme_entity_detection.model.RobertaModel --trainer.max_epochs 12 --trainer.accumulate_grad_batches 1 --trainer.precision "bf16-mixed" --trainer.logger TensorBoardLogger --trainer.logger.save_dir ./logs/roberta_faces/test  --config configs/config.yaml --ckpt_path ./logs/roberta_faces/training/lightning_logs/version_<version>/checkpoints/best-checkpoint.ckpt
+python -m meme_entity_detection.scripts.baseline test --seed_everything 4 --data.batch_size 32 --data.data_dir "./data/HVVMemes" --data.ocr_type "GPT-4o" --data.tokenizer "FacebookAI/roberta-large" --model.lr 0.00001 --model.backbone meme_entity_detection.model.RobertaModel --trainer.max_epochs 12 --trainer.accumulate_grad_batches 1 --trainer.precision "bf16-mixed" --trainer.logger TensorBoardLogger --trainer.logger.save_dir ./logs/roberta_faces/test  --config configs/config.yaml --ckpt_path ./logs/roberta_faces/training/lightning_logs/version_<version>/checkpoints/best-checkpoint.ckpt
 ```
 
 Check test results with:
@@ -61,7 +63,7 @@ tensorboard --logdir ./logs/roberta_faces/test
 
 Train with:
 ```bash
-python -m meme_entity_detection.scripts.baseline fit --seed_everything 4 --data.batch_size 16 --data.data_dir "./data/HVVMemes" --data.ocr_type "GPT-4o" --model.lr 0.00001 --model.backbone meme_entity_detection.model.DebertaModel --trainer.max_epochs 12 --trainer.accumulate_grad_batches 1 --trainer.precision "bf16-mixed" --trainer.logger TensorBoardLogger --trainer.logger.save_dir ./logs/deberta_faces/training  --config configs/config.yaml 
+python -m meme_entity_detection.scripts.baseline fit --seed_everything 4 --data.batch_size 32 --data.data_dir "./data/HVVMemes" --data.ocr_type "GPT-4o" --data.tokenizer "microsoft/deberta-v3-large" --model.lr 0.00001 --model.backbone meme_entity_detection.model.DebertaModel --trainer.max_epochs 12 --trainer.accumulate_grad_batches 1 --trainer.precision "bf16-mixed" --trainer.logger TensorBoardLogger --trainer.logger.save_dir ./logs/deberta_faces/training  --config configs/config.yaml 
 ```
 
 Check training results with:
@@ -71,7 +73,7 @@ tensorboard --logdir ./logs/deberta_faces/training
 
 Test with:
 ```bash
-python -m meme_entity_detection.scripts.baseline test --seed_everything 4 --data.batch_size 16 --data.data_dir "./data/HVVMemes" --data.ocr_type "GPT-4o" --model.lr 0.00001 --model.backbone meme_entity_detection.model.DebertaModel --trainer.max_epochs 12 --trainer.accumulate_grad_batches 1 --trainer.precision "bf16-mixed" --trainer.logger TensorBoardLogger --trainer.logger.save_dir ./logs/deberta_faces/test  --config configs/config.yaml --ckpt_path ./logs/deberta_faces/training/lightning_logs/version_<version>/checkpoints/best-checkpoint.ckpt
+python -m meme_entity_detection.scripts.baseline test --seed_everything 4 --data.batch_size 32 --data.data_dir "./data/HVVMemes" --data.ocr_type "GPT-4o" --model.lr 0.00001 --model.backbone meme_entity_detection.model.DebertaModel --trainer.max_epochs 12 --trainer.accumulate_grad_batches 1 --trainer.precision "bf16-mixed" --trainer.logger TensorBoardLogger --trainer.logger.save_dir ./logs/deberta_faces/test  --config configs/config.yaml --ckpt_path ./logs/deberta_faces/training/lightning_logs/version_<version>/checkpoints/best-checkpoint.ckpt
 ```
 
 Check test results with:
