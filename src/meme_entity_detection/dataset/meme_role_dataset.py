@@ -19,6 +19,7 @@ class MemeRoleDataset(torch.utils.data.Dataset):
         use_faces=False,
         ocr_type="OCR", # use GPT-4o or OCR
         use_gpt_description: bool = False):
+        assert ocr_type=="OCR" or ocr_type=="GPT-4o"
         
         self.data_df = self._load_data_into_df(file_path)
         self.use_faces = use_faces
@@ -96,6 +97,7 @@ class MemeRoleDataset(torch.utils.data.Dataset):
         if self.use_gpt_description:
             description += " [SEP] " + row["description GPT-4o"]
         
+        # TODO: Check how to construct text here
         return {
             "image": image,
             "text": row["sentence"] + " [SEP] " + row["word"] + " [SEP] " + faces + description,
