@@ -20,16 +20,17 @@ class MemeRoleDataset(torch.utils.data.Dataset):
         file_path: Path,
         tokenizer: str,
         use_faces: bool,
-        ocr_type: str,  # use GPT-4o or OCR
-        use_gpt_description: bool,
+        ocr_type: str,
+        description_type: str,
         balance_dataset: bool = False,
     ):
         assert ocr_type == "OCR" or ocr_type == "GPT-4o"
+        assert description_type == "GPT-4o" or description_type == "Kosmos-2" or description_type is None
 
         self.data_df = self._load_data_into_df(file_path)
         self.use_faces = use_faces
         self.ocr_type = ocr_type
-        self.use_gpt_description = use_gpt_description
+        self.description_type = description_type
 
         self.image_base_dir = file_path.parent.parent / "images"
 
@@ -50,9 +51,9 @@ class MemeRoleDataset(torch.utils.data.Dataset):
         all_roles = ['hero', 'villain', 'victim', 'other']
         df = pd.DataFrame([{
             "sentence": vals['OCR'].lower().replace('\n', ' '),
-            "sentence GPT-4o": (vals["OCR GPT-4o"] if vals["OCR GPT-4o"] else "").lower().replace('\n', ' '),
-            "description GPT-4o": (vals["IMAGE DESCRIPTION GPT-4o"]
-                                   if vals["IMAGE DESCRIPTION GPT-4o"] else "").lower().replace('\n', ' '),
+            "sentence GPT-4o": (vals["OCR GPT-4o"] or "").lower().replace('\n', ' '),
+            "description GPT-4o": (vals["IMAGE DESCRIPTION GPT-4o"] or "").lower().replace('\n', ' '),
+            "description Kosmos-2": (vals["Kosmos Image Descriptions"] or "").lower().replace('\n', ' '),
             "classification GPT-4o": defaultdict(lambda: "other", vals["CLASSIFICATION GPT-4o"])
             if vals["CLASSIFICATION GPT-4o"] else defaultdict(lambda: "other"),
             "original": vals['OCR'],
@@ -100,14 +101,21 @@ class MemeRoleDataset(torch.utils.data.Dataset):
         image = Image.open(self.image_base_dir / self.data_df['image'].iloc[idx]).convert("RGB")
 
         row = self.data_df.iloc[idx]
-
-        faces = " [SEP] " + " - ".join(row["faces"] or []) if self.use_faces else ""
-        description = " [SEP] " + row["description GPT-4o"] if self.use_gpt_description else ""
         entity = row["word"]
-        ocr = row["sentence"]
-        # Use only gpt ocr if enabled and available
-        if self.ocr_type == "GPT-4o" and row["sentence GPT-4o"] != "":
-            ocr = row["sentence GPT-4o"]
+        faces = " [SEP] " + " - ".join(row["faces"] or []) if self.use_faces else ""
+
+        description = ""
+        match self.description_type:
+            case "GPT-4o":
+                description = " [SEP] " + row["description GPT-4o"]
+            case "Kosmos-2":
+                description = " [SEP] " + row["description Kosmos-2"]
+
+        match self.ocr_type:
+            case "GPT-4o":
+                ocr = row["sentence GPT-4o"] or row["sentence"]
+            case "OCR":
+                ocr = row["sentence"]
 
         return {
             "image": image,
