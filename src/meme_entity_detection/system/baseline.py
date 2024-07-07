@@ -9,11 +9,21 @@ import meme_entity_detection.model.interface
 
 
 class BaselineLightningModel(L.LightningModule):
+    """
+    Baseline Lightning Model for meme entity detection.
+    """
 
     def __init__(
         self, lr: float = 1e-3,
         backbone: meme_entity_detection.model.interface.Model = meme_entity_detection.model.ViltModel()
     ):
+        """
+        Initialize the BaselineLightningModel.
+
+        Parameters:
+            lr: Learning rate for the optimizer.
+            backbone: Backbone model used for predictions, like RoBERTa, DeBERTa, ...
+        """
         super().__init__()
         self.lr = lr
         self.model = backbone
@@ -40,10 +50,13 @@ class BaselineLightningModel(L.LightningModule):
         self.test_f1 = torchmetrics.F1Score(task="multiclass", average='macro', num_classes=num_classes)
         self.test_confusion_matrix = torchmetrics.ConfusionMatrix(task="multiclass", num_classes=num_classes)
 
-    def forward(self, images, part_point_clouds, part_equivalence_counts):
-        return self.model(images, part_point_clouds, part_equivalence_counts)
-
     def configure_optimizers(self):
+        """
+        Configure the optimizer and learning rate scheduler.
+
+        Returns:
+            Dictionary containing the optimizer and learning rate scheduler.
+        """
         no_decay = ["bias", "LayerNorm.bias", "LayerNorm.weight"]
         optimizer_parameters = [{
             'params': [p for n, p in self.named_parameters() if not any(nd in n for nd in no_decay)],
@@ -65,12 +78,32 @@ class BaselineLightningModel(L.LightningModule):
         }
 
     def _write_log(self, mode, accuracy, precision, recall, f1):
+        """
+        Log the metrics.
+
+        Parameters:
+            mode: Mode of logging (train, validation, test).
+            accuracy: Accuracy metric.
+            precision: Precision metric.
+            recall: Recall metric.
+            f1: F1 score metric.
+        """
         self.log(f'{mode}/accuracy', accuracy, on_step=False, on_epoch=True)
         self.log(f'{mode}/precision', precision, on_step=False, on_epoch=True)
         self.log(f'{mode}/recall', recall, on_step=False, on_epoch=True)
         self.log(f'{mode}/f1', f1, on_step=False, on_epoch=True)
 
     def training_step(self, batch, batch_idx):
+        """
+        Training step for the model.
+
+        Parameters:
+            batch: Batch of input data.
+            batch_idx: Index of the batch.
+
+        Returns:
+            Loss value.
+        """
         loss, preds = self.model(batch)
 
         self.log('train/loss', loss)
@@ -84,6 +117,13 @@ class BaselineLightningModel(L.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
+        """
+        Validation step for the model.
+
+        Parameters:
+            batch: Batch of input data.
+            batch_idx: Index of the batch.
+        """
         loss, preds = self.model(batch)
 
         self.log('validation/loss', loss)
@@ -95,6 +135,13 @@ class BaselineLightningModel(L.LightningModule):
         self._write_log("validation", self.val_accuracy, self.val_precision, self.val_recall, self.val_f1)
 
     def test_step(self, batch, batch_idx):
+        """
+        Test step for the model.
+
+        Parameters:
+            batch: Batch of input data.
+            batch_idx: Index of the batch.
+        """
         loss, preds = self.model(batch)
 
         self.test_accuracy(preds, batch["labels"])
@@ -106,7 +153,9 @@ class BaselineLightningModel(L.LightningModule):
         self._write_log("test", self.test_accuracy, self.test_precision, self.test_recall, self.test_f1)
 
     def on_test_epoch_end(self):
-
+        """
+        Hook to execute at the end of the test epoch.
+        """
         self.logger.experiment.add_figure(
             'test/confusion_matrix',
             self.test_confusion_matrix.plot(labels=meme_entity_detection.utils.task_properties.labels)[0],

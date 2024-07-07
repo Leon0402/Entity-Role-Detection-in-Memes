@@ -8,11 +8,31 @@ from .interface import Tokenizer, Model
 
 
 class ViltTokenizer(Tokenizer):
+    """
+    Tokenizer for the ViLT model using a pre-trained ViLT processor.
+    """
 
-    def __init__(self, model_name: str = "FacebookAI/roberta-large"):
+    def __init__(self, model_name: str = "dandelin/vilt-b32-finetuned-nlvr2"):
+        """
+        Initialize the ViltTokenizer with the given model name.
+
+        Parameters:
+            model_name: Name of the pre-trained model to use.
+        """
+
         self.processor = transformers.ViltProcessor.from_pretrained(model_name)
 
     def tokenize(self, texts: list[str], images: list[PIL.Image]) -> dict:
+        """
+        Tokenize the input texts and images.
+
+        Parameters:
+            texts: List of text strings to tokenize.
+            images: List of PIL Image objects to tokenize.
+
+        Returns:
+            Dictionary containing the tokenized text and images. Refer to the documentation of the tokenizer for details.
+        """
         encoding = self.processor(
             text=texts, images=images, return_tensors="pt", padding="max_length", max_length=196, truncation=True
         )
@@ -22,8 +42,14 @@ class ViltTokenizer(Tokenizer):
 
 
 class ViltModel(Model):
+    """
+    Model class for ViLT (Vision-and-Language Transformer) for image and text classification.
+    """
 
     def __init__(self):
+        """
+        Initialize the ViltModel with the pre-trained configuration and weights.
+        """
         super().__init__()
 
         cfg = transformers.ViltConfig.from_pretrained("dandelin/vilt-b32-finetuned-nlvr2")
@@ -55,7 +81,16 @@ class ViltModel(Model):
         self.model.vilt.load_state_dict(checkpoint, strict=True)
         self.model.train()
 
-    def forward(self, batch):
+    def forward(self, batch: dict) -> tuple[float, int]:
+        """
+        Forward pass of the model.
+
+        Parameters:
+            batch: Batch of input data containing input_ids, attention_mask, token_type_ids, pixel_values, pixel_mask, and labels.
+
+        Returns:
+            Tuple containing the loss and the predicted class indices.
+        """
         output = self.model(
             input_ids=batch['input_ids'],
             attention_mask=batch['attention_mask'],

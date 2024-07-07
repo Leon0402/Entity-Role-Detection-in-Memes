@@ -17,9 +17,10 @@ class DataModule(L.LightningDataModule):
 
     def __init__(
         self, data_dir: Path, batch_size: int = 16, seed: int = 42, num_workers: int = 12,
-        balance_train_dataset: bool = True, tokenizer: meme_entity_detection.model.interface.
-        Tokenizer = meme_entity_detection.model.deberta.DebertaTokenizer, use_faces: bool = True,
-        ocr_type: OcrType = OcrType.STANDARD, description_type: DescriptionType = DescriptionType.NONE
+        balance_train_dataset: bool = True,
+        tokenizer: meme_entity_detection.model.interface.Tokenizer = meme_entity_detection.model.DebertaTokenizer(),
+        use_faces: bool = True, ocr_type: OcrType = OcrType.STANDARD,
+        description_type: DescriptionType = DescriptionType.NONE
     ):
         """
         Initialize the DataModule with given parameters.
