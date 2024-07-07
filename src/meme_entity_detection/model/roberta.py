@@ -1,11 +1,23 @@
 import torch
 import torch.nn as nn
 import transformers
+import PIL
 
 import meme_entity_detection.utils.task_properties
 
+from .interface import Tokenizer, Model
 
-class RobertaModel(nn.Module):
+
+class RobertaTokenizer(Tokenizer):
+
+    def __init__(self, model_name: str = "FacebookAI/roberta-large"):
+        self.processor = transformers.AutoTokenizer.from_pretrained(model_name, use_fast=True)
+
+    def tokenize(self, texts: list[str], images: list[PIL.Image]) -> dict:
+        return self.processor(texts, truncation=True, padding='max_length', return_tensors="pt", max_length=196)
+
+
+class RobertaModel(Model):
 
     def __init__(self, model_name: str = "FacebookAI/roberta-large"):
         super().__init__()

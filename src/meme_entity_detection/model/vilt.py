@@ -1,11 +1,27 @@
 import torch
-import torch.nn as nn
 import transformers
+import PIL
 
 import meme_entity_detection.utils.task_properties
 
+from .interface import Tokenizer, Model
 
-class ViltModel(nn.Module):
+
+class ViltTokenizer(Tokenizer):
+
+    def __init__(self, model_name: str = "FacebookAI/roberta-large"):
+        self.processor = transformers.ViltProcessor.from_pretrained(model_name)
+
+    def tokenize(self, texts: list[str], images: list[PIL.Image]) -> dict:
+        encoding = self.processor(
+            text=texts, images=images, return_tensors="pt", padding="max_length", max_length=196, truncation=True
+        )
+        batch_size, height, width = encoding['pixel_mask'].shape
+        encoding['pixel_mask'] = encoding['pixel_mask'].view(batch_size, 1, height, width)
+        return encoding
+
+
+class ViltModel(Model):
 
     def __init__(self):
         super().__init__()

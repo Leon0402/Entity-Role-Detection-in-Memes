@@ -1,20 +1,23 @@
 import torch
-import torch.nn as nn
 import lightning as L
 import transformers
 import torchmetrics
 
 import meme_entity_detection.model
 import meme_entity_detection.utils.task_properties
+import meme_entity_detection.model.interface
 
 
 class BaselineLightningModel(L.LightningModule):
 
-    def __init__(self, lr: float = 1e-3, backbone: nn.Module = meme_entity_detection.model.ViltModel()):
+    def __init__(
+        self, lr: float = 1e-3,
+        backbone: meme_entity_detection.model.interface.Model = meme_entity_detection.model.ViltModel()
+    ):
         super().__init__()
         self.lr = lr
         self.model = backbone
-        
+
         self.save_hyperparameters(ignore=['backbone'])
 
         # TODO

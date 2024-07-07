@@ -1,5 +1,4 @@
-from .vilt import ViltModel
-from .deberta import DebertaModel
-from .roberta import RobertaModel
+from .vilt import ViltModel, ViltTokenizer
+from .deberta import DebertaModel, DebertaTokenizer
+from .roberta import RobertaModel, RobertaTokenizer
 from .chatgpt_prompts import GPT4oPromptAnswers
-

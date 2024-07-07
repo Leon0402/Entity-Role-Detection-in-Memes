@@ -3,7 +3,6 @@ import json
 from collections import defaultdict
 
 import torch
-import transformers
 import pandas as pd
 import sklearn.utils
 import torch.utils.data.dataloader
@@ -11,21 +10,34 @@ from tqdm import tqdm
 from PIL import Image
 
 import meme_entity_detection.utils.task_properties
+import meme_entity_detection.model.interface
+
+from .config import OcrType, DescriptionType
 
 
 class MemeRoleDataset(torch.utils.data.Dataset):
+    """
+    Dataset class for Meme Role Detection.
+    """
 
     def __init__(
         self,
         file_path: Path,
-        tokenizer: str,
         use_faces: bool,
-        ocr_type: str,
-        description_type: str,
+        ocr_type: OcrType,
+        description_type: DescriptionType,
         balance_dataset: bool = False,
     ):
-        assert ocr_type == "OCR" or ocr_type == "GPT-4o"
-        assert description_type == "GPT-4o" or description_type == "Kosmos-2" or description_type is None
+        """
+        Initialize the MemeRoleDataset.
+
+        Parameters:
+            file_path: Path to the dataset json file.
+            use_faces: Whether to use recognized celebrity faces in dataset.
+            ocr_type: Type of OCR to use.
+            description_type: Type of description to use.
+            balance_dataset: Whether to balance the training dataset (e.g. increase number of heroes, villain & victim samples by resampling, which are underpresented)
+        """
 
         self.data_df = self._load_data_into_df(file_path)
         self.use_faces = use_faces
@@ -41,10 +53,16 @@ class MemeRoleDataset(torch.utils.data.Dataset):
             meme_entity_detection.utils.task_properties.label2id[role] for role in self.data_df['role'].to_list()
         ]
 
-        # Deberta: Doesn't work with a slow tokenizer for some reason? Maybe a bug
-        self.processor = transformers.AutoTokenizer.from_pretrained(tokenizer, use_fast=True)
-
     def _load_data_into_df(self, file_path: Path) -> pd.DataFrame:
+        """
+        Load data from the given file path into a DataFrame.
+
+        Parameters:
+            file_path: Path to the json dataset file.
+
+        Returns:
+            DataFrame containing the dataset information.
+        """
         with open(file_path, 'r') as json_file:
             json_data = [json.loads(line) for line in json_file]
 
@@ -77,17 +95,48 @@ class MemeRoleDataset(torch.utils.data.Dataset):
 
         return df
 
-    def _correct_gpt4o_classification(self, class_: str, all_roles: list):
-        class_ = class_.replace("villian", "villain")
-        if not class_ in all_roles:
-            class_ = "other"
-        return class_
+    def _correct_gpt4o_classification(self, role: str, all_roles: list):
+        """
+        Correct the classification if it is not in the list of all roles.
+
+        Parameters:
+            role: The role classified by ChatGPT-4o.
+            all_roles: List of all possible roles.
+
+        Returns:
+            Corrected classification.
+        """
+
+        role = role.replace("villian", "villain")
+        if role not in all_roles:
+            role = "other"
+        return role
 
     def _balance_dataset(self, df: pd.DataFrame) -> pd.DataFrame:
-        upsampled_role_dfs = [self._upsample_and_concat(df, role) for role in ['hero', 'villain', 'victim']]
+        """
+        Balance the dataset by resampling underrepresented classes.
+
+        Parameters:
+            df: DataFrame containing the dataset information.
+
+        Returns:
+            Balanced DataFrame.
+        """
+        upsampled_role_dfs = [self._resample_and_concat(df, role) for role in ['hero', 'villain', 'victim']]
         return pd.concat([df[df.role == 'other'], *upsampled_role_dfs])
 
-    def _upsample_and_concat(self, df: pd.DataFrame, role: str, n_samples: int = 2000) -> pd.DataFrame:
+    def _resample_and_concat(self, df: pd.DataFrame, role: str, n_samples: int = 2000) -> pd.DataFrame:
+        """
+        Resample the specified role in the dataset.
+
+        Parameters:
+            df: DataFrame containing the dataset information.
+            role: The role to resample.
+            n_samples: Number of samples to upsample to.
+
+        Returns:
+            DataFrame with the resampled role.
+        """
         df_role = df[df.role == role]
         df_role_upsampled = sklearn.utils.resample(
             df_role,
@@ -97,50 +146,75 @@ class MemeRoleDataset(torch.utils.data.Dataset):
         )
         return pd.concat([df_role, df_role_upsampled])
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> dict:
+        """
+        Get a single item from the dataset by index.
+
+        NOTE: This function is overriden and automatically called by the pytorch DataLoader.
+
+        Parameters:
+            idx: Index of the item to retrieve.
+
+        Returns:
+            Dictionary containing the image, text, predicted label by GPT-4o, and label.
+        """
         image = Image.open(self.image_base_dir / self.data_df['image'].iloc[idx]).convert("RGB")
 
         row = self.data_df.iloc[idx]
         entity = row["word"]
-        faces = " [SEP] " + " - ".join(row["faces"] or []) if self.use_faces else ""
-
-        description = ""
-        match self.description_type:
-            case "GPT-4o":
-                description = " [SEP] " + row["description GPT-4o"]
-            case "Kosmos-2":
-                description = " [SEP] " + row["description Kosmos-2"]
 
         match self.ocr_type:
-            case "GPT-4o":
-                ocr = row["sentence GPT-4o"] or row["sentence"]
-            case "OCR":
-                ocr = row["sentence"]
+            case OcrType.STANDARD:
+                ocr = " [SEP] " + row["sentence"]
+            case OcrType.GPT:
+                ocr = " [SEP] " + row["sentence GPT-4o"] or row["sentence"]
+            case OcrType.NONE:
+                ocr = ""
+
+        match self.description_type:
+            case DescriptionType.KOSMOS:
+                description = " [SEP] " + row["description Kosmos-2"]
+            case DescriptionType.GPT:
+                description = " [SEP] " + row["description GPT-4o"]
+            case DescriptionType.NONE:
+                description = ""
+
+        faces = ""
+        if self.use_faces:
+            faces = " [SEP] " + " - ".join(row["faces"] or [])
 
         return {
             "image": image,
-            "text": entity + " [SEP] " + ocr + " [SEP] " + faces + description,
+            "text": entity + ocr + faces + description,
             "class_id GPT-4o": row["class_id GPT-4o"],
             "label": torch.tensor(self.encoded_labels[idx], dtype=torch.long)
         }
 
-    def __len__(self):
+    def __len__(self) -> int:
+        """
+        Get the length of the dataset.
+
+        Returns:
+            Length of the dataset.
+        """
         return len(self.encoded_labels)
 
     @staticmethod
-    def collate_fn(batch, processor):
+    def collate_fn(batch: dict, processor: meme_entity_detection.model.interface.Tokenizer):
+        """
+        Collate function to process a batch of data.
+
+        Parameters:
+            batch: Batch of data to collate.
+            processor: Tokenizer processor to use.
+
+        Returns:
+            Dictionary containing the processed batch data.
+        """
         texts = [item['text'] for item in batch]
+        images = [item['image'] for item in batch]
 
-        # TODO: Check what value makes sense for max_length. One of the paper uses 275, but this significantly slowed down training
-        # images = [item['image'] for item in batch]
-        # encoding = processor(
-        #     text=texts, images=images, return_tensors="pt", padding="max_length", max_length=64, truncation=True
-        # )
-        # batch_size, height, width = encoding['pixel_mask'].shape
-        # encoding['pixel_mask'] = encoding['pixel_mask'].view(batch_size, 1, height, width)
-
-        encoding = processor(texts, truncation=True, padding='max_length', return_tensors="pt", max_length=196)
-
+        encoding = processor.tokenize(texts, images)
         encoding['labels'] = torch.tensor([item['label'] for item in batch], dtype=torch.long)
         encoding['class_id GPT-4o'] = torch.tensor([item['class_id GPT-4o'] for item in batch])
 
