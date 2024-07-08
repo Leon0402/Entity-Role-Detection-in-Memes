@@ -54,17 +54,3 @@ Check test results with:
 ```bash
 tensorboard --logdir ./logs/baseline/test
 ```
-
-## Provisioning 
-
-There are some helper scripts to run the code on cloud platforms such as vastai. 
-
-```bash
-./scripts/provisioning/setup_vastai.sh
-```
-
-Some TODOS: 
-- More flexible filtering? Perharps let the user do it in a seperate process and provide some hints how to do it
-- Direct ssh connections only, on website this can be filtered / configured in docker container 
-- Connection to ssh does not quite work yet, maybe this step should also be separate (if we want to run it in multiple terminals for instance), maybe just print out the command?
-- The onstart script currently fails, because it needs the agent forwarding. It has to be run manually again when starting the server
