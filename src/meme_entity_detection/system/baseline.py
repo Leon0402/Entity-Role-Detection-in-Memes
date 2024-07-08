@@ -3,26 +3,37 @@ import lightning as L
 import transformers
 import torchmetrics
 
+import meme_entity_detection.model
+import meme_entity_detection.utils.task_properties
+import meme_entity_detection.model.interface
+
 
 class BaselineLightningModel(L.LightningModule):
+    """
+    Baseline Lightning Model for meme entity detection.
+    """
 
-    def __init__(self, lr: float = 1e-3, model_name="microsoft/deberta-v3-large"):
+    def __init__(
+        self, lr: float = 1e-3,
+        backbone: meme_entity_detection.model.interface.Model = meme_entity_detection.model.ViltModel()
+    ):
+        """
+        Initialize the BaselineLightningModel.
+
+        Parameters:
+            lr: Learning rate for the optimizer.
+            backbone: Backbone model used for predictions, like RoBERTa, DeBERTa, ...
+        """
         super().__init__()
-
-        label2id = {'hero': 3, 'villain': 2, 'victim': 1, 'other': 0}
-        num_classes = len(label2id)
-
-        self.labels = [item[0] for item in sorted(label2id.items(), key=lambda item: item[1])]
-
         self.lr = lr
-        self.model = transformers.AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=num_classes)
-        self.model.train()
+        self.model = backbone
 
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=['backbone'])
 
         # TODO
         # self.example_input_array = ()
 
+        num_classes = meme_entity_detection.utils.task_properties.num_classes
         self.train_accuracy = torchmetrics.Accuracy(task="multiclass", average='macro', num_classes=num_classes)
         self.train_precision = torchmetrics.Precision(task="multiclass", average='macro', num_classes=num_classes)
         self.train_recall = torchmetrics.Recall(task="multiclass", average='macro', num_classes=num_classes)
@@ -39,10 +50,13 @@ class BaselineLightningModel(L.LightningModule):
         self.test_f1 = torchmetrics.F1Score(task="multiclass", average='macro', num_classes=num_classes)
         self.test_confusion_matrix = torchmetrics.ConfusionMatrix(task="multiclass", num_classes=num_classes)
 
-    def forward(self, images, part_point_clouds, part_equivalence_counts):
-        return self.model(images, part_point_clouds, part_equivalence_counts)
-
     def configure_optimizers(self):
+        """
+        Configure the optimizer and learning rate scheduler.
+
+        Returns:
+            Dictionary containing the optimizer and learning rate scheduler.
+        """
         no_decay = ["bias", "LayerNorm.bias", "LayerNorm.weight"]
         optimizer_parameters = [{
             'params': [p for n, p in self.named_parameters() if not any(nd in n for nd in no_decay)],
@@ -52,7 +66,7 @@ class BaselineLightningModel(L.LightningModule):
             'weight_decay': 0.0
         }]
 
-        optimizer = transformers.AdamW(optimizer_parameters, lr=self.lr)
+        optimizer = torch.optim.AdamW(optimizer_parameters, lr=self.lr)
 
         return {
             "optimizer": optimizer,
@@ -63,90 +77,89 @@ class BaselineLightningModel(L.LightningModule):
             },
         }
 
+    def _write_log(self, mode, accuracy, precision, recall, f1):
+        """
+        Log the metrics.
+
+        Parameters:
+            mode: Mode of logging (train, validation, test).
+            accuracy: Accuracy metric.
+            precision: Precision metric.
+            recall: Recall metric.
+            f1: F1 score metric.
+        """
+        self.log(f'{mode}/accuracy', accuracy, on_step=False, on_epoch=True)
+        self.log(f'{mode}/precision', precision, on_step=False, on_epoch=True)
+        self.log(f'{mode}/recall', recall, on_step=False, on_epoch=True)
+        self.log(f'{mode}/f1', f1, on_step=False, on_epoch=True)
+
     def training_step(self, batch, batch_idx):
-        input_ids = batch['input_ids']
-        attention_mask = batch['attention_mask']
-        token_type_ids = batch['token_type_ids']
-        sentiment_target = batch['labels']
+        """
+        Training step for the model.
 
-        output = self.model(
-            input_ids,
-            attention_mask,
-            token_type_ids,
-            labels=sentiment_target,
-        )
+        Parameters:
+            batch: Batch of input data.
+            batch_idx: Index of the batch.
 
-        self.log('train/loss', output.loss, batch_size=len(input_ids))
+        Returns:
+            Loss value.
+        """
+        loss, preds = self.model(batch)
 
-        preds = torch.argmax(output.logits, dim=1)
-        self.train_accuracy(preds, sentiment_target)
-        self.train_precision(preds, sentiment_target)
-        self.train_recall(preds, sentiment_target)
-        self.train_f1(preds, sentiment_target)
+        self.log('train/loss', loss)
 
-        self.log('train/accuracy', self.train_accuracy, on_step=False, on_epoch=True)
-        self.log('train/precision', self.train_precision, on_step=False, on_epoch=True)
-        self.log('train/recall', self.train_recall, on_step=False, on_epoch=True)
-        self.log('train/f1', self.train_f1, on_step=False, on_epoch=True)
+        self.train_accuracy(preds, batch["labels"])
+        self.train_precision(preds, batch["labels"])
+        self.train_recall(preds, batch["labels"])
+        self.train_f1(preds, batch["labels"])
+        self._write_log("train", self.train_accuracy, self.train_precision, self.train_recall, self.train_f1)
 
-        return output.loss
+        return loss
 
     def validation_step(self, batch, batch_idx):
-        input_ids = batch['input_ids']
-        attention_mask = batch['attention_mask']
-        token_type_ids = batch['token_type_ids']
-        sentiment_target = batch['labels']
+        """
+        Validation step for the model.
 
-        output = self.model(
-            input_ids,
-            attention_mask,
-            token_type_ids,
-            labels=sentiment_target,
-        )
+        Parameters:
+            batch: Batch of input data.
+            batch_idx: Index of the batch.
+        """
+        loss, preds = self.model(batch)
 
-        self.log('validation/loss', output.loss, batch_size=len(input_ids))
+        self.log('validation/loss', loss)
+        self.val_accuracy(preds, batch["labels"])
+        self.val_precision(preds, batch["labels"])
+        self.val_recall(preds, batch["labels"])
+        self.val_f1(preds, batch["labels"])
 
-        preds = torch.argmax(output.logits, dim=1)
-        self.val_accuracy(preds, sentiment_target)
-        self.val_precision(preds, sentiment_target)
-        self.val_recall(preds, sentiment_target)
-        self.val_f1(preds, sentiment_target)
-
-        self.log('validation/accuracy', self.val_accuracy, on_step=False, on_epoch=True)
-        self.log('validation/precision', self.val_precision, on_step=False, on_epoch=True)
-        self.log('validation/recall', self.val_recall, on_step=False, on_epoch=True)
-        self.log('validation/f1', self.val_f1, on_step=False, on_epoch=True)
+        self._write_log("validation", self.val_accuracy, self.val_precision, self.val_recall, self.val_f1)
 
     def test_step(self, batch, batch_idx):
-        input_ids = batch['input_ids']
-        attention_mask = batch['attention_mask']
-        token_type_ids = batch['token_type_ids']
-        sentiment_target = batch['labels']
+        """
+        Test step for the model.
 
-        output = self.model(
-            input_ids,
-            attention_mask,
-            token_type_ids,
-            labels=sentiment_target,
-        )
+        Parameters:
+            batch: Batch of input data.
+            batch_idx: Index of the batch.
+        """
+        loss, preds = self.model(batch)
 
-        preds = torch.argmax(output.logits, dim=1)
-        self.test_accuracy(preds, sentiment_target)
-        self.test_precision(preds, sentiment_target)
-        self.test_recall(preds, sentiment_target)
-        self.test_f1(preds, sentiment_target)
-        self.test_confusion_matrix(preds, sentiment_target)
+        self.test_accuracy(preds, batch["labels"])
+        self.test_precision(preds, batch["labels"])
+        self.test_recall(preds, batch["labels"])
+        self.test_f1(preds, batch["labels"])
+        self.test_confusion_matrix(preds, batch["labels"])
 
-        self.log('test/accuracy', self.test_accuracy, on_step=False, on_epoch=True)
-        self.log('test/precision', self.test_precision, on_step=False, on_epoch=True)
-        self.log('test/recall', self.test_recall, on_step=False, on_epoch=True)
-        self.log('test/f1', self.test_f1, on_step=False, on_epoch=True)
+        self._write_log("test", self.test_accuracy, self.test_precision, self.test_recall, self.test_f1)
 
     def on_test_epoch_end(self):
-
+        """
+        Hook to execute at the end of the test epoch.
+        """
         self.logger.experiment.add_figure(
             'test/confusion_matrix',
-            self.test_confusion_matrix.plot(labels=self.labels)[0], global_step=self.global_step
+            self.test_confusion_matrix.plot(labels=meme_entity_detection.utils.task_properties.labels)[0],
+            global_step=self.global_step
         )
 
     # def on_before_optimizer_step(self, optimizer):

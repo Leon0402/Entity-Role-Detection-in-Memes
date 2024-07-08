@@ -19,6 +19,13 @@ protobuf = "^5.26.1"
 lightning = {version = "^2.2.5", extras = ["extra"]}
 tensorboard = "^2.16.2"
 seaborn = "^0.13.2"
+opencv-python = "^4.10.0.82"
+torchvision = "^0.18.1"
+accelerate = "^0.31.0"
+datasets = "^2.20.0"
+pyspellchecker = "^0.8.1"
+spacy = "^3.7.5"
+openai = "^1.35.6"
 
 
 [tool.poetry.group.dev.dependencies]
